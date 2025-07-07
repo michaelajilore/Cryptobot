@@ -1,12 +1,173 @@
 [package]
-name = "crypto"
+name = "ultra-low-latency-eth-node"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+authors = ["Michael Ajilore"]
+description = "Ultra low-latency Ethereum node price feed with shared memory"
+license = "MIT"
+
+# Performance-critical build settings
+[profile.release]
+# Maximum optimization level
+opt-level = 3
+# Enable link-time optimization for better performance
+lto = "fat"
+# More aggressive optimization passes
+codegen-units = 1
+# Disable debug info for smaller binary and faster compilation
+debug = false
+# Disable overflow checks for maximum performance
+overflow-checks = false
+# Disable panic handling for smaller binary
+panic = "abort"
+# Enable CPU-specific optimizations
+[target.'cfg(target_arch = "x86_64")']
+rustflags = ["-C", "target-cpu=native"]
 
 [dependencies]
-tokio = { version = "1", features = ["full"] }
-tokio-tungstenite = "0.20"
+# Ethereum client library - Latest stable version
+ethers = { version = "2.0", features = ["ws", "rustls"] }
+
+# Async runtime - Use single-threaded for deterministic performance
+tokio = { version = "1.0", features = ["full", "rt"] }
+
+# WebSocket utilities
 futures-util = "0.3"
+
+# Core affinity for CPU pinning - CRITICAL for low latency
+core_affinity = "0.8"
+
+# Hex decoding for contract calls
+hex = "0.4"
+
+# Serde for serialization (if needed for config)
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-url = "2.2"
-core_affinity = "0.5"
+
+# High-performance logging (can be disabled in production for max speed)
+log = "0.4"
+env_logger = "0.10"
+
+# Metrics collection for monitoring performance
+metrics = "0.21"
+metrics-exporter-prometheus = "0.12"
+
+# Memory allocator optimization - mimalloc is often fastest for small allocations
+# Choose ONE of these allocators:
+mimalloc = { version = "0.1", default-features = false }
+# Alternative: jemalloc (comment out mimalloc if using this)
+# jemallocator = "0.5"
+
+# CPU profiling and performance analysis
+pprof = { version = "0.12", features = ["criterion", "flamegraph"] }
+
+# Additional performance boosters
+parking_lot = "0.12"  # Faster mutexes than std::sync::Mutex
+crossbeam = "0.8"     # Lock-free data structures
+rayon = "1.7"         # Data parallelism
+ahash = "0.8"         # Faster hashing algorithm
+smallvec = "1.11"     # Stack-allocated vectors for small collections
+arrayvec = "0.7"      # Fixed-size arrays on the stack
+tinyvec = "1.6"       # Tiny vectors for ultimate performance
+
+# Memory profiling and optimization
+memmap2 = "0.9"       # Memory-mapped files for large data
+page_size = "0.6"     # Memory page size utilities
+
+# CPU and system optimization
+libc = "0.2"          # Direct system calls
+nix = "0.27"          # Unix system interface
+hwloc = "0.5"         # Hardware topology detection
+
+# High-performance serialization
+rmp-serde = "1.1"     # MessagePack serialization (faster than JSON)
+bincode = "1.3"       # Binary serialization
+postcard = "1.0"      # No-std binary serialization
+
+# Time and timing utilities
+quanta = "0.12"       # High-performance timing
+coarsetime = "0.1"    # Coarse time for less precision but better performance
+
+[profile.dev]
+# Faster debug builds
+opt-level = 1
+debug = true
+overflow-checks = true
+
+# Custom profile for benchmarking
+[profile.bench]
+opt-level = 3
+debug = true
+lto = true
+codegen-units = 1
+
+# Custom profile for maximum release performance
+[profile.max-perf]
+inherits = "release"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false
+overflow-checks = false
+
+# Target-specific optimizations
+[target.'cfg(target_arch = "x86_64")']
+rustflags = [
+    "-C", "target-cpu=native",
+    "-C", "target-feature=+avx2",
+    "-C", "prefer-dynamic=no"
+]
+
+# Optional: Workspace configuration if you have multiple crates
+[workspace]
+members = [".", "benchmarks", "utils"]
+
+# Build script for additional optimizations
+[[bin]]
+name = "ultra-low-latency-eth-node"
+path = "src/main.rs"
+
+# Example binaries for testing shared memory access
+[[example]]
+name = "price_reader"
+path = "examples/price_reader.rs"
+
+[[example]]
+name = "daemon_monitor"
+path = "examples/daemon_monitor.rs"
+
+# Benchmarks for performance testing
+[[bench]]
+name = "latency_benchmark"
+harness = false
+
+[[bench]]
+name = "shared_memory_benchmark"
+harness = false
+
+[[bench]]
+name = "price_calculation_benchmark"
+harness = false
+
+# Build dependencies for compile-time optimizations
+[build-dependencies]
+cc = "1.0"        # C/C++ compilation for native code
+cmake = "0.1"     # CMake integration for complex builds
+bindgen = "0.68"  # Generate Rust bindings from C headers
+pkg-config = "0.3"  # System package configuration
+
+# Development dependencies
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }  # Benchmarking
+tokio-test = "0.4"     # Async testing utilities
+proptest = "1.4"       # Property-based testing
+quickcheck = "1.0"     # Property-based testing alternative
+pretty_assertions = "1.4"  # Better assertion output
+serial_test = "3.0"    # Run tests serially to avoid conflicts
+
+# Benchmarking and profiling
+flamegraph = "0.6"     # Flame graph generation
+perf-event = "0.4"     # Hardware performance counters
+cpuprofiler = "0.4"    # CPU profiling
