@@ -1,0 +1,6 @@
+[build]
+rustflags = [
+    "-C", "target-cpu=native",
+    "-C", "target-feature=+avx2",
+    "-C", "prefer-dynamic=no"
+]

@@ -1,15 +1,13 @@
-use futures_util::{SinkExt, StreamExt};
+use futures_util::StreamExt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 use ethers::prelude::*;
 use ethers::providers::{Provider, Ws};
-use ethers::types::{Address, U256, Filter, Log, Transaction, H256};
+use ethers::types::{Address, U256, Filter, H256, TransactionRequest};
 use core_affinity;
-use std::str::FromStr;
 use std::sync::mpsc as std_mpsc;
-use std::sync::Mutex;
 
 // Configuration
 const DEXCOUNT: usize = 4;
@@ -163,8 +161,8 @@ impl EthNode {
         let slot0_call = "0x3850c7bd";
         let call_data = hex::decode(&slot0_call[2..])?;
         
-        let call = CallRequest {
-            to: Some(pool_address),
+        let call = TransactionRequest {
+            to: Some(pool_address.into()),
             data: Some(call_data.into()),
             ..Default::default()
         };
@@ -181,8 +179,8 @@ impl EthNode {
         let get_reserves_call = "0x0902f1ac";
         let call_data = hex::decode(&get_reserves_call[2..])?;
         
-        let call = CallRequest {
-            to: Some(pair_address),
+        let call = TransactionRequest {
+            to: Some(pair_address.into()),
             data: Some(call_data.into()),
             ..Default::default()
         };
@@ -222,19 +220,19 @@ impl EthNode {
                     
                     Ok(price)
                 } else {
-                    Ok(1800_000000000000000000u64) // Default price
+                    Ok(1_800_000_000_000_000_000u64) // Default price: 1.8 * 10^18 (fits in u64)
                 }
             } else {
-                Ok(1800_000000000000000000u64) // Default price
+                Ok(1800_000_000_000_000_000u64) // Default price: 1800 ETH with 18 decimals
             }
         } else {
-            Ok(1800_000000000000000000u64) // Default price
+            Ok(1800_000_000_000_000_000u64) // Default price: 1800 ETH with 18 decimals
         }
     }
     
     // Convert sqrtPriceX96 to actual price
     fn sqrt_price_to_price(&self, sqrt_price_x96: U256) -> u64 {
-        let q96 = U256::from(2u64).pow(U256::from(96));
+        let _q96 = U256::from(2u64).pow(U256::from(96));
         let price_x192 = sqrt_price_x96 * sqrt_price_x96;
         let q192 = U256::from(2u64).pow(U256::from(192));
         let price_ratio = price_x192 / q192;
@@ -275,9 +273,11 @@ impl EthNode {
                 .name(format!("pool-{}", config.id))
                 .spawn(move || {
                     // PIN THREAD TO SPECIFIC CPU CORE
-                    if let Some(core_id) = core_affinity::get_core_ids().get(config.id) {
-                        core_affinity::set_for_current(*core_id);
-                        println!("Pool {} thread PINNED to core {}", config.id, core_id.id);
+                    if let Some(cores) = core_affinity::get_core_ids() {
+                        if let Some(core_id) = cores.get(config.id) {
+                            core_affinity::set_for_current(*core_id);
+                            println!("Pool {} thread PINNED to core {}", config.id, core_id.id);
+                        }
                     }
                     
                     // ULTRA LOW-LATENCY price monitoring loop
@@ -464,7 +464,6 @@ impl EthNode {
         
         // Hold the flag for a brief moment to ensure all daemons see it
         // This runs in a separate thread to avoid blocking the main price update loop
-        let pool_id_copy = pool_id;
         thread::spawn(move || {
             std::thread::sleep(Duration::from_nanos(EVENT_FLAG_DURATION_NANOS));
             
